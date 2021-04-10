@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="utf-8">
+		<title>Animate a point along a route</title>
+		<meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
+		<!-- <link href="https://api.mapbox.com/mapbox-gl-js/v1.2.0/mapbox-gl.css" rel="stylesheet"> -->
+		<script>
+			window.v = "1.2.0";
+			if (window.location.hash.indexOf('v=')) {
+				window.v = window.location.hash.split("=")[1];
+			}
+			var js = '<script src="https://api.mapbox.com/mapbox-gl-js/v'+window.v+'/mapbox-gl.js"><\/script>';
+			document.write(js);
+		</script>
+		<style>
+			body {
+				margin: 0;
+				padding: 0;
+			}
+
+			#map {
+				position: absolute;
+				top: 0;
+				bottom: 0;
+				width: 100%;
+			}
+		</style>
+	</head>
+	<body>
+		<style>
+			.overlay {
+				position: absolute;
+				top: 10px;
+				left: 10px;
+			}
+
+			.overlay button {
+				font: 600 12px/20px 'Helvetica Neue', Arial, Helvetica, sans-serif;
+				background-color: #3386c0;
+				color: #fff;
+				display: inline-block;
+				margin: 40px 0px;
+				padding: 10px 20px;
+				border: none;
+				cursor: pointer;
+				border-radius: 3px;
+			}
+
+			.overlay button:hover {
+				background-color: #4ea0da;
+			}
+		</style>
+		<script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
+
+		<div id="map"></div>
+		<div class="overlay">
+			<button id="replay">Replay</button>
+		</div>
+
+		<script>
+			// TO MAKE THE MAP APPEAR YOU MUST
+			// ADD YOUR ACCESS TOKEN FROM
+			// https://account.mapbox.com
+			mapboxgl.accessToken = 'pk.eyJ1IjoicGV0ci1uYWd5LW1hcGJveCIsImEiOiJjanB2YXVwMGQwMXQyNDlsOWo3MzMza2FjIn0.-MFdWhYvFHNYA-N6M5IA1g';
+			var map = new mapboxgl.Map({
+				container: 'map',
+				style: 'mapbox://styles/mapbox/streets-v11',
+				center: [-96, 37.8],
+				zoom: 3
+			});
+
+			function rotateCamera(timestamp) {
+				// clamp the rotation between 0 -360 degrees
+				// Divide timestamp by 100 to slow rotation to ~10 degrees / sec
+				map.rotateTo((timestamp / 100) % 360, {
+					duration: 0
+				});
+				// Request the next frame of the animation.
+				requestAnimationFrame(rotateCamera);
+			}
+
+			// San Francisco
+			var origin = [-122.414, 37.776];
+
+			// Washington DC
+			var destination = [-77.032, 38.913];
+
+			// A simple line from origin to destination.
+			var route = {
+				'type': 'FeatureCollection',
+				'features': [{
+					'type': 'Feature',
+					'geometry': {
+						'type': 'LineString',
+						'coordinates': [origin, destination]
+					}
+				}]
+			};
+
+			// A single point that animates along the route.
+			// Coordinates are initially set to origin.
+			var point = {
+				'type': 'FeatureCollection',
+				'features': [{
+					'type': 'Feature',
+					'properties': {},
+					'geometry': {
+						'type': 'Point',
+						'coordinates': origin
+					}
+				}]
+			};
+
+			// Calculate the distance in kilometers between route start/end point.
+			var lineDistance = turf.length(route.features[0]);
+
+			var arc = [];
+
+			// Number of steps to use in the arc and animation, more steps means
+			// a smoother arc and animation, but too many steps will result in a
+			// low frame rate
+			var steps = 5000;
+
+			// Draw an arc between the `origin` & `destination` of the two points
+			for (var i = 0; i < lineDistance; i += lineDistance / steps) {
+				var segment = turf.along(route.features[0], i);
+				arc.push(segment.geometry.coordinates);
+			}
+
+			// Update the route with calculated arc coordinates
+			route.features[0].geometry.coordinates = arc;
+
+			// Used to increment the value of the point measurement against the route.
+			var counter = 0;
+
+			map.on('load', function() {
+				// Add a source and layer displaying a point which will be animated in a circle.
+				map.addSource('route', {
+					'type': 'geojson',
+					'data': route
+				});
+
+				map.addSource('point', {
+					'type': 'geojson',
+					'data': point
+				});
+				map.addSource('point1', {
+					'type': 'geojson',
+					'data': point
+				});
+
+				map.addLayer({
+					'id': 'route',
+					'source': 'route',
+					'type': 'line',
+					'paint': {
+						'line-width': 2,
+						'line-color': '#007cbf'
+					}
+				});
+
+				map.addLayer({
+					'id': 'point',
+					'source': 'point',
+					'type': 'symbol',
+					'layout': {
+						'icon-image': 'airport-15',
+						'icon-rotate': ['get', 'bearing'],
+						'icon-rotation-alignment': 'map',
+						'icon-allow-overlap': false,
+						'icon-ignore-placement': true
+					}
+				});
+
+map.addLayer({
+    "id": 'brtmap-circle-layer',
+    "type": "circle",
+    "source": 'point1',
+    "paint": {
+        "circle-radius": 20,
+        "circle-color": '#0099FF',
+        "circle-opacity": 0.8,
+        "circle-pitch-alignment": 'map'
+    }
+});
+				function animate() {
+					var start =
+						route.features[0].geometry.coordinates[
+							counter >= steps ? counter - 1 : counter
+						];
+					var end =
+						route.features[0].geometry.coordinates[
+							counter >= steps ? counter : counter + 1
+						];
+					if (!start || !end) return;
+
+					// Update point geometry to a new position based on counter denoting
+					// the index to access the arc
+					point.features[0].geometry.coordinates =
+						route.features[0].geometry.coordinates[counter];
+
+					// Calculate the bearing to ensure the icon is rotated to match the route arc
+					// The bearing is calculated between the current point and the next point, except
+					// at the end of the arc, which uses the previous point and the current point
+					point.features[0].properties.bearing = turf.bearing(
+						turf.point(start),
+						turf.point(end)
+					);
+
+					// Update the source with this new data
+					map.getSource('point').setData(point);
+					map.getSource('point1').setData(point);
+
+					map.easeTo({
+						center: point.features[0].geometry.coordinates,
+						bearing:point.features[0].properties.bearing,
+						essential: true // this animation is considered essential with respect to prefers-reduced-motion
+					});
+					// Request the next frame of animation as long as the end has not been reached
+					if (counter < steps) {
+						requestAnimationFrame(animate);
+					}
+
+					counter = counter + 1;
+				}
+				
+				
+				document.getElementById("replay").innerHTML = "Replay:v" +window.v;
+
+				document
+					.getElementById('replay')
+					.addEventListener('click', function() {
+						// Set the coordinates of the original point back to origin
+						point.features[0].geometry.coordinates = origin;
+
+						// Update the source layer
+						map.getSource('point').setData(point);
+
+						// Reset the counter
+						counter = 0;
+
+						// Restart the animation
+						animate(counter);
+					});
+
+				// Start the animation
+				animate(counter);
+			});
+		</script>
+		<script>
+			javascript: (function() {
+				var script = document.createElement('script');
+				script.onload = function() {
+					var stats = new Stats();
+					document.body.appendChild(stats.dom);
+					requestAnimationFrame(function loop() {
+						stats.update();
+						requestAnimationFrame(loop)
+					});
+				};
+				script.src = 'https://mrdoob.github.io/stats.js/build/stats.min.js';
+				document.head.appendChild(script);
+			})()
+		</script>
+	</body>
+</html>

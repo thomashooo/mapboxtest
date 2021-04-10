@@ -1,0 +1,47 @@
+<!doctype html>
+
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <title>Mapbox.js vs Mapbox GL JS performance</title>
+    <meta name="description" content="Mapbox.js vs Mapbox GL JS">
+    <meta name="author" content="Petr Nagy">
+    <style>
+        html,body { margin: 0; padding: 0; }
+        .wrapper {
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+        }
+        .panel {
+            width: 50%;
+            cursor: grab;
+            height: 100vh;
+        }
+        .panel.left {
+            float: left;
+        }
+        .panel.right {
+            float: right;
+        }
+        iframe { border: 0; width: 100%; height: 100%; }
+    </style>
+</head>
+
+<body>
+    <div>
+        <div class="panel left" id="map-mapbox">
+            <script>
+                document.write(`<iframe src="./symbolTest.html#?v=1.2.0"></iframe>`);
+            </script>
+        </div>
+        <div class="panel right">
+            <script>
+                document.write(`<iframe src="./symbolTest.html#?v=1.3.0"></iframe>`);
+            </script>
+        </div>
+    </div>
+</body>
+
+</html>
